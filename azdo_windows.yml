@@ -1,0 +1,63 @@
+trigger:
+- main
+
+variables:
+    BuildConfiguration: Release
+    DotNetVersion: 8.0.204
+
+stages:
+- stage: BuildApps
+  jobs:
+  - job: BuildMAUIApps
+    displayName: Build MAUI App
+    pool:
+      vmImage: 'windows-2022'
+      demands:
+      - MSBuild
+      
+    steps:
+    
+    - task: UseDotNet@2
+      displayName: .NET Version
+      inputs:
+        packageType: 'sdk'
+        version: '$(DotNetVersion)'
+    
+    - task: PowerShell@2
+      displayName: Install .NET MAUI
+      inputs:
+        targetType: 'inline'
+        script: |
+          & dotnet nuget locals all --clear
+          & dotnet workload install maui
+
+    - task: Bash@3
+      displayName: Restore Packages
+      inputs:
+        targetType: 'inline'
+        script: |
+          dotnet restore LocalizationDemo.sln
+
+
+  # https://docs.microsoft.com/en-us/dotnet/maui/android/deployment/overview
+    - task: Bash@3
+      displayName: Build Android App
+      inputs:
+        targetType: 'inline'
+        script: |
+          dotnet publish LocalizationDemo.sln -f net8.0-android -c Release
+
+    # Signing Android App : https://docs.microsoft.com/en-us/azure/devops/pipelines/apps/mobile/app-signing?view=azure-devops&tabs=apple-install-during-build#sign-your-android-app
+
+    - task: CopyFiles@2
+      inputs:
+        Contents: |
+          **/*.apk
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop_artifacts'
+        publishLocation: 'Container'
